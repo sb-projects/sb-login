@@ -1,13 +1,13 @@
 package service
 
 import (
-	"github.com/sb-projects/sb-login/client"
+	"github.com/sb-projects/sb-login/src/client"
 )
 
 type (
 	Service interface {
 	}
 	impl struct {
-		client client.Client
+		srvClient client.Client
 	}
 )
