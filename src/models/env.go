@@ -6,8 +6,9 @@ type (
 		Port string `validate:"required"`
 	}
 	DBConfig struct {
-		Name string `validate:"required"`
-		URL  string `validate:"required"`
+		Name    string `validate:"required"`
+		URL     string `validate:"required"`
+		Migrate bool
 	}
 
 	Config struct {

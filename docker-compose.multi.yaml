@@ -1,0 +1,287 @@
+version: '3.9'
+
+networks:
+  codebasenetwork:
+    name: codebasenetwork
+    driver: bridge
+
+services:
+  postgre-cache:
+    image: postgres:16.1-alpine
+    #orignial: image: postgres:16.1
+    container_name: postgre-cache
+    env_file:
+      - .env
+    ports:
+      - ${PG_PORT:?error}:${PG_PORT:?error}
+    environment:
+      - POSTGRES_USER=${PG_USER:?error}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?error}
+      - POSTGRES_DB=${PG_DB:?error}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ./volumes/pgdata:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${PG_USER} -d ${PG_DB}'"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - codebasenetwork
+
+  zookeeper1:
+    container_name: zookeeper1
+    image: bitnami/zookeeper:3.9
+    ports:
+      - "2181"
+      - "2888"
+      - "3888"
+    environment:
+      - ZOO_SERVER_ID=1
+      - ZOO_SERVERS=zookeeper1:2888:3888,zookeeper2:2888:3888,zookeeper3:2888:3888
+      # - ZOO_ENABLE_PROMETHEUS_METRICS=no
+      # - ZOO_PROMETHEUS_METRICS_PORT_NUMBER=7000
+      - ALLOW_ANONYMOUS_LOGIN=yes
+      # - ZOO_ENABLE_AUTH=yes
+      # - ZOO_SERVER_USERS=user1,user2
+      # - ZOO_SERVER_PASSWORDS=pass4user1,pass4user2
+      # - ZOO_CLIENT_USER=user1
+      # - ZOO_CLIENT_PASSWORD=pass4user1
+    volumes:
+      - ./volumes/zoo/1/:/bitnami/zookeeper
+    networks:
+      - codebasenetwork
+
+  zookeeper2:
+    container_name: zookeeper2
+    image: bitnami/zookeeper:3.9
+    ports:
+      - "2181"
+      - "2888"
+      - "3888"
+    volumes:
+      - ./volumes/zoo/2/:/bitnami/zookeeper
+    environment:
+      - ZOO_SERVER_ID=2
+      - ZOO_SERVERS=zookeeper1:2888:3888,zookeeper2:2888:3888,zookeeper3:2888:3888
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - codebasenetwork
+
+  zookeeper3:
+    container_name: zookeeper3
+    image: bitnami/zookeeper:3.9
+    ports:
+      - "2181"
+      - "2888"
+      - "3888"
+    volumes:
+      - ./volumes/zoo/3/:/bitnami/zookeeper
+    environment:
+      - ZOO_SERVER_ID=3
+      - ZOO_SERVERS=zookeeper1:2888:3888,zookeeper2:2888:3888,zookeeper3:2888:3888
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - codebasenetwork
+
+  kafka0:
+    container_name: kafka0
+    image: bitnami/kafka:3.4.1-debian-11-r117
+    ports:
+      - "9092"
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka0:9093,1@kafka1:9093,2@kafka2:9093
+      - KAFKA_KRAFT_CLUSTER_ID=abcdefghijklmnopqrstuv
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Clustering
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      # Zookeeper
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+      - KAFKA_CFG_ZOOKEEPER_METADATA_MIGRATION_ENABLE=true
+    depends_on:
+      - zookeeper1
+      - zookeeper2
+      - zookeeper3
+    volumes:
+      - ./volumes/kafka/0:/bitnami/kafka
+    networks:
+      - codebasenetwork
+
+  kafka1:
+    container_name: kafka1
+    image: bitnami/kafka:3.4.1-debian-11-r117
+    ports:
+      - "9092"
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka0:9093,1@kafka1:9093,2@kafka2:9093
+      - KAFKA_KRAFT_CLUSTER_ID=abcdefghijklmnopqrstuv
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Clustering
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      # Zookeeper
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+      - KAFKA_CFG_ZOOKEEPER_METADATA_MIGRATION_ENABLE=true
+    depends_on:
+      - zookeeper1
+      - zookeeper2
+      - zookeeper3
+    volumes:
+      - ./volumes/kafka/1:/bitnami/kafka
+    networks:
+      - codebasenetwork
+
+  kafka2:
+    container_name: kafka2
+    image: bitnami/kafka:3.4.1-debian-11-r117
+    ports:
+      - "9092"
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=2
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka0:9093,1@kafka1:9093,2@kafka2:9093
+      - KAFKA_KRAFT_CLUSTER_ID=abcdefghijklmnopqrstuv
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Clustering
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      # Zookeeper
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+      - KAFKA_CFG_ZOOKEEPER_METADATA_MIGRATION_ENABLE=true
+    depends_on:
+      - zookeeper1
+      - zookeeper2
+      - zookeeper3
+    volumes:
+      - ./volumes/kafka/2:/bitnami/kafka
+    networks:
+      - codebasenetwork
+
+  kafka-helper:
+    build:
+      context: .
+      dockerfile: ./kafka.Dockerfile
+    container_name: kafka-helper
+    env_file:
+      - .env
+    environment:
+      - CREATE_TOPICS="yes"
+      - KAFKA_BROKERS=${KAFKA_BROKERS_LIST:?error}
+      - TOPICS=${TOPIC_AUDIT:?error},${TOPIC_EVENT:?error}
+    depends_on:
+      kafka0:
+        condition: service_healthy
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+    networks:
+      - codebasenetwork
+
+  kafka-consumer:
+    build:
+      context: .
+      dockerfile: ./consumer.Dockerfile
+    container_name: kafka-consumer
+    env_file:
+      - .env
+    environment:
+      - KAFKA_BROKERS=${KAFKA_BROKERS_LIST:?error}
+      - TOPICS=${TOPIC_AUDIT:?error},${TOPIC_EVENT:?error}
+    depends_on:
+      kafka0:
+        condition: service_healthy
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+    networks:
+      - codebasenetwork
+
+
+  login-service:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: login-service
+    env_file:
+      - .env
+    environment:
+      - APP_PORT=${APP_SRV_PORT:?error}
+      - APP_NAME=${APP_SRV_NAME:?error}
+      - PG_URL=${APP_DB_PG_URL:?error}
+      - KA_AUDIT=${TOPIC_AUDIT:?error}
+      - KAFKA_BASE_ADD=${KAFKA_ADD:?error}
+      - KAFKA_BROKERS=${KAFKA_BROKERS_LIST:?error}
+    ports:
+      - ${APP_SRV_PORT:?error}:${APP_SRV_PORT:?error}
+    depends_on:
+      postgre-cache:
+        condition: service_healthy
+      zookeeper1:
+        condition: service_healthy
+      kafka-helper:
+        condition: service_completed_successfully
+    restart: on-failure
+    networks:
+      - codebasenetwork
+
+  # mailhog:
+  #   image: cd2team/mailhog:1685232349
+  #   # original: image: mailhog/mailhog:latest
+  #   container_name: mailhog
+  #   ports:
+  #     - 1025:1025
+  #     - 8025:8025
+  #   restart: on-failure
+  #   networks:
+  #     - codebasenetwork
+
+  nginx:
+    # specifies the latest nginx image
+    image: nginx:1.25.3-alpine
+    # original: image: nginx:latest
+    platform: linux/amd64
+    container_name: nginx
+    # Connects the conf file of the container to the conf file in our folder
+    volumes:
+      - ./devops/local/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    # It will start up the nginx only when all api containers have started
+    depends_on:
+      - login-service
+    restart: on-failure
+    # Connects the port 80 of the nginx container to localhost:80 or localhost
+    ports:
+      - ${NGINX_PORT:?error}:${NGINX_PORT:?error}
+    networks:
+      - codebasenetwork
+
